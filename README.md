@@ -1,2 +1,2 @@
-# Local-Reader-
-local reader 
+# paperback-reader
+paperback-reader
