@@ -15,11 +15,17 @@ export function BookCover({ book, compact = false }: BookCoverProps) {
         borderColor: colorWithAlpha(book.cover.accent, 0.26),
       }}
     >
-      <div className="book-cover__mark" aria-hidden="true">
-        {book.cover.mark}
-      </div>
-      <div className="book-cover__title">{book.title}</div>
-      <div className="book-cover__meta">{book.author || book.fileKind.toUpperCase()}</div>
+      {book.cover.imageUrl ? (
+        <img className="book-cover__image" src={book.cover.imageUrl} alt="" aria-hidden="true" />
+      ) : (
+        <>
+          <div className="book-cover__mark" aria-hidden="true">
+            {book.cover.mark}
+          </div>
+          <div className="book-cover__title">{book.title}</div>
+          <div className="book-cover__meta">{book.author || book.fileKind.toUpperCase()}</div>
+        </>
+      )}
     </div>
   );
 }

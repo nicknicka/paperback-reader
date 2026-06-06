@@ -190,6 +190,7 @@ function buildBookFromChapters(
       fileName,
       fileKind,
       sourceKind,
+      contentHash: makeContentHash(title, chapters),
       importedAt: now,
       lastOpenedAt: now,
       chapters,
@@ -231,6 +232,16 @@ function makeCover(title: string): Book["cover"] {
   const [tone, accent] = palettes[seed % palettes.length];
   const mark = title.replace(/\s+/g, "").slice(0, 1) || "书";
   return { tone, accent, mark };
+}
+
+function makeContentHash(title: string, chapters: Book["chapters"]) {
+  const source = `${title}\n${chapters.map((chapter) => `${chapter.title}\n${chapter.paragraphs.join("\n")}`).join("\n")}`;
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function compareFilesNaturally(a: File, b: File) {

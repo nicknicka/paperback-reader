@@ -102,6 +102,13 @@ button:disabled {
   color: #f7f4ec;
 }
 
+.button--primary:not(:disabled):hover {
+  border-color: #24211d;
+  background: #24211d;
+  color: #fbfaf5;
+  box-shadow: 0 12px 26px rgb(47 43 37 / 0.16);
+}
+
 .text-button {
   min-height: 34px;
   padding: 0 12px;
@@ -178,6 +185,7 @@ button:disabled {
   border-radius: 14px;
   background: rgb(251 250 245 / 0.96);
   box-shadow: 0 22px 48px rgb(61 54 43 / 0.14);
+  animation: menuPanelIn 140ms ease-out;
 }
 
 .import-menu__panel button {
@@ -190,10 +198,16 @@ button:disabled {
   background: transparent;
   color: #2b2925;
   text-align: left;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
 }
 
-.import-menu__panel button:hover {
-  background: rgb(47 43 37 / 0.07);
+.import-menu__panel button:hover,
+.import-menu__panel button:focus-visible {
+  background: rgb(47 43 37 / 0.08);
+  color: #1f1d19;
+  outline: 0;
 }
 
 .import-menu__panel strong {
@@ -326,26 +340,33 @@ button:disabled {
   white-space: nowrap;
 }
 
-.book-card__delete {
+.book-card__actions {
+  display: flex;
+  gap: 12px;
   margin-top: 8px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+
+.book-card:hover .book-card__actions,
+.book-card:focus-within .book-card__actions {
+  opacity: 1;
+}
+
+.book-card__actions button {
   padding: 2px 0;
   border: 0;
   background: transparent;
   color: #a9a197;
   font-size: 12px;
-  opacity: 0;
   transition:
     color 150ms ease,
-    opacity 150ms ease;
+    transform 150ms ease;
 }
 
-.book-card:hover .book-card__delete,
-.book-card:focus-within .book-card__delete {
-  opacity: 1;
-}
-
-.book-card__delete:hover {
+.book-card__actions button:hover {
   color: #6f473d;
+  transform: translateY(-1px);
 }
 
 .book-cover {
@@ -374,6 +395,14 @@ button:disabled {
   opacity: 0.16;
 }
 
+.book-cover__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .book-cover__mark {
   justify-self: end;
   opacity: 0.28;
@@ -396,6 +425,173 @@ button:disabled {
   margin-top: 18px;
   font-size: 12px;
   letter-spacing: 0.08em;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(37 34 29 / 0.22);
+  backdrop-filter: blur(10px);
+  animation: modalBackdropIn 180ms ease-out both;
+}
+
+.modal-backdrop.is-closing {
+  animation: modalBackdropOut 150ms ease-in both;
+}
+
+.book-edit-dialog {
+  display: grid;
+  grid-template-columns: minmax(132px, 180px) minmax(0, 1fr);
+  gap: 28px;
+  width: min(620px, 100%);
+  padding: 22px;
+  border: 1px solid rgb(38 35 31 / 0.14);
+  border-radius: 16px;
+  background: #f8f6ef;
+  box-shadow: 0 28px 80px rgb(57 50 41 / 0.22);
+  transform-origin: center 48%;
+  animation: bookEditDialogIn 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.modal-backdrop.is-closing .book-edit-dialog {
+  animation: bookEditDialogOut 150ms ease-in both;
+}
+
+.book-edit-dialog__cover {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.book-edit-dialog__cover .book-cover {
+  width: 100%;
+}
+
+.book-edit-dialog__body {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+}
+
+.book-edit-dialog__body h2 {
+  margin: 0;
+  overflow: hidden;
+  color: #2b2925;
+  font-size: 24px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  color: #756f65;
+  font-size: 13px;
+}
+
+.field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgb(38 35 31 / 0.16);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.66);
+  color: #2b2925;
+  outline: none;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.field input:focus {
+  border-color: rgb(38 35 31 / 0.34);
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 0 0 3px rgb(38 35 31 / 0.08);
+}
+
+.book-edit-dialog__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.book-edit-dialog__meta span {
+  padding: 4px 8px;
+  border: 1px solid rgb(38 35 31 / 0.12);
+  border-radius: 999px;
+  color: #746d61;
+  font-size: 12px;
+}
+
+.book-edit-dialog__error {
+  margin: 0;
+  color: #7b3e34;
+  font-size: 13px;
+}
+
+.book-edit-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+@keyframes menuPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes modalBackdropIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalBackdropOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes bookEditDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bookEditDialogOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
 }
 
 .reader-shell {
@@ -759,8 +955,12 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .toc-panel,
   .settings-panel,
+  .import-menu__panel,
+  .modal-backdrop,
+  .book-edit-dialog,
   .reader-topbar,
   .reader-footer {
+    animation-duration: 1ms;
     animation: none;
     transition: none;
   }
@@ -791,6 +991,25 @@ button:disabled {
     width: min(100%, 148px);
   }
 
+  .book-card__actions {
+    opacity: 1;
+  }
+
+  .book-edit-dialog {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 36px);
+    overflow: auto;
+  }
+
+  .book-edit-dialog__cover {
+    grid-template-columns: 110px 1fr;
+    align-items: start;
+  }
+
+  .book-edit-dialog__cover .book-cover {
+    grid-row: span 2;
+  }
+
   .reader-stage {
     padding: 0;
   }
@@ -817,6 +1036,12 @@ button:disabled {
 
   .import-menu {
     justify-self: start;
+  }
+
+  .import-menu__panel {
+    right: auto;
+    left: 0;
+    width: min(240px, calc(100vw - 28px));
   }
 
   .book-grid {

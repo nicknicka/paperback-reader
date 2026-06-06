@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Library } from "./components/Library";
 import { Reader } from "./components/Reader";
-import { deleteBook, listBooks, saveBook } from "./lib/bookshelf";
+import { deleteBook, getBook, listBooks, saveBook, toBookSummary } from "./lib/bookshelf";
 import {
   importBrowserDirectory,
   importBrowserFile,
@@ -9,21 +9,17 @@ import {
   importTauriFile,
   isTauriRuntime,
 } from "./lib/importer";
-import type { Book, ImportError, ImportMode, ReaderView } from "./lib/types";
+import type { Book, BookSummary, ImportError, ImportMode, ReaderView } from "./lib/types";
 import "./styles.css";
 
 export default function App() {
-  const [books, setBooks] = useState<Book[]>([]);
+  const [books, setBooks] = useState<BookSummary[]>([]);
   const [view, setView] = useState<ReaderView>("library");
   const [activeBookId, setActiveBookId] = useState<string | null>(null);
+  const [activeBook, setActiveBook] = useState<Book | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<ImportError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const activeBook = useMemo(
-    () => books.find((book) => book.id === activeBookId) ?? null,
-    [activeBookId, books],
-  );
 
   useEffect(() => {
     listBooks().then(setBooks).catch((reason) => {
@@ -35,12 +31,14 @@ export default function App() {
   }, []);
 
   const upsertBook = useCallback(async (book: Book) => {
+    const summary = toBookSummary(book);
     setBooks((current) => {
       const next = current.some((item) => item.id === book.id)
-        ? current.map((item) => (item.id === book.id ? book : item))
-        : [book, ...current];
+        ? current.map((item) => (item.id === book.id ? summary : item))
+        : [summary, ...current];
       return [...next].sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
     });
+    setActiveBook((current) => (current?.id === book.id ? book : current));
     await saveBook(book);
   }, []);
 
@@ -65,6 +63,7 @@ export default function App() {
       if (!result) return;
       await upsertBook(result.book);
       setActiveBookId(result.book.id);
+      setActiveBook(result.book);
       setView("reader");
       if (result.warnings.length > 0) {
         setNotice(result.warnings.join(" "));
@@ -80,20 +79,58 @@ export default function App() {
     }
   };
 
-  const handleOpen = async (book: Book) => {
-    const updated = { ...book, lastOpenedAt: Date.now() };
+  const handleOpen = async (book: BookSummary) => {
+    const fullBook = await getBook(book.id);
+    if (!fullBook) {
+      setError({
+        title: "无法打开这本书",
+        message: "本地书库里缺少这本书的章节数据，请重新导入。",
+      });
+      return;
+    }
+
+    const updated = { ...fullBook, lastOpenedAt: Date.now() };
     await upsertBook(updated);
     setActiveBookId(book.id);
+    setActiveBook(updated);
     setView("reader");
   };
 
-  const handleDelete = async (book: Book) => {
+  const handleDelete = async (book: BookSummary) => {
     await deleteBook(book.id);
     setBooks((current) => current.filter((item) => item.id !== book.id));
     if (activeBookId === book.id) {
       setActiveBookId(null);
+      setActiveBook(null);
       setView("library");
     }
+  };
+
+  const handleUpdateBookInfo = async (
+    book: BookSummary,
+    updates: { title: string; author?: string; coverImageUrl?: string },
+  ) => {
+    const fullBook = await getBook(book.id);
+    if (!fullBook) {
+      setError({
+        title: "无法编辑这本书",
+        message: "本地书库里缺少这本书的章节数据，请重新导入。",
+      });
+      return;
+    }
+
+    const title = updates.title.trim() || fullBook.title;
+    const author = updates.author?.trim() || undefined;
+    await upsertBook({
+      ...fullBook,
+      title,
+      author,
+      cover: {
+        ...fullBook.cover,
+        mark: title.replace(/\s+/g, "").slice(0, 1) || "书",
+        imageUrl: updates.coverImageUrl || undefined,
+      },
+    });
   };
 
   const handleReaderChange = useCallback(
@@ -107,7 +144,11 @@ export default function App() {
     return (
       <Reader
         book={activeBook}
-        onBack={() => setView("library")}
+        onBack={() => {
+          setView("library");
+          setActiveBookId(null);
+          setActiveBook(null);
+        }}
         onChange={handleReaderChange}
       />
     );
@@ -122,6 +163,7 @@ export default function App() {
       onImport={handleImport}
       onOpen={handleOpen}
       onDelete={handleDelete}
+      onUpdateBookInfo={handleUpdateBookInfo}
     />
   );
 }

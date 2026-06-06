@@ -32,6 +32,7 @@ export interface Book {
   fileName: string;
   fileKind: FileKind;
   sourceKind: "file" | "directory";
+  contentHash?: string;
   importedAt: number;
   lastOpenedAt: number;
   chapters: Chapter[];
@@ -41,7 +42,24 @@ export interface Book {
     tone: string;
     accent: string;
     mark: string;
+    imageUrl?: string;
   };
+}
+
+export interface BookSummary {
+  id: string;
+  title: string;
+  author?: string;
+  fileName: string;
+  fileKind: FileKind;
+  sourceKind: "file" | "directory";
+  contentHash?: string;
+  importedAt: number;
+  lastOpenedAt: number;
+  progress: ReadingProgress;
+  chapterCount: number;
+  currentChapterTitle: string;
+  cover: Book["cover"];
 }
 
 export interface ImportResult {
