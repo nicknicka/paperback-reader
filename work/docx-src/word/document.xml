@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>第一章 纸页测试</w:t></w:r></w:p>
+    <w:p><w:r><w:t>这是一段来自 DOCX 的正文，用来确认导入链路可以解析现代 Word 文档。</w:t></w:r></w:p>
+    <w:p><w:r><w:t>第二章 安静阅读</w:t></w:r></w:p>
+    <w:p><w:r><w:t>阅读器应该保留文字和章节结构，不复制 Word 的视觉样式。</w:t></w:r></w:p>
+  </w:body>
+</w:document>

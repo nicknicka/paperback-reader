@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#efeee8"/>
+  <path d="M18 12h29a5 5 0 0 1 5 5v37H20a8 8 0 0 1-8-8V18a6 6 0 0 1 6-6Z" fill="#fbfaf5" stroke="#2f2b25" stroke-opacity=".22"/>
+  <path d="M20 12v42" stroke="#8b8171" stroke-opacity=".35"/>
+  <text x="33" y="40" text-anchor="middle" font-size="22" font-family="serif" fill="#726858">书</text>
+</svg>

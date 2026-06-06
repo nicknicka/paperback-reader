@@ -1,0 +1,2 @@
+This is not a real legacy Word binary file.
+It exists only to verify the graceful failure path for .doc import.
