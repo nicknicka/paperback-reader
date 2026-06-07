@@ -183,7 +183,7 @@ Tauri 桌面端还支持 `chapters/` 子目录作为兼容路径。如果根目�
 - `title` 会作为书名；没有时继续使用目录名。
 - `author` 和 `description` 会保存到本地书籍信息里，简介不显示在书库卡片上。
 - `cover` 指向目录内图片，支持 JPG、PNG、WebP，大小不能超过 3MB。
-- `chapters[].file` 是章节 TXT 文件名，章节会优先按 `order` 排序。
+- `chapters[].file` 是章节 TXT 文件名或相对路径，例如 `0001.txt` 或 `chapters/0001.txt`；章节会优先按 `order` 排序。
 
 如果没有 `cover` 字段，导入时会自动查找根目录下的常见封面文件：
 

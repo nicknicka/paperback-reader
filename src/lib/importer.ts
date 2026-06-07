@@ -18,10 +18,17 @@ interface DirectoryManifest {
   author?: string;
   description?: string;
   cover?: string;
+  fileNames: string[];
   total: number | null;
   titleByFileName: Map<string, string>;
   orderByFileName: Map<string, number>;
   warnings: string[];
+}
+
+interface TauriDirectoryTxtEntry {
+  name: string;
+  path: string;
+  manifestFileName?: string;
 }
 
 export async function importBrowserFile(file: File): Promise<ImportResult> {
@@ -49,14 +56,15 @@ export async function importBrowserDirectory(files: FileList | File[]): Promise<
     return parts.length <= 2;
   });
   const manifest = await readBrowserDirectoryManifest(allFiles);
-  const filesToImport = sortDirectoryFiles(currentLevelTxtFiles.length > 0 ? currentLevelTxtFiles : txtFiles, manifest);
+  const selection = selectBrowserDirectoryTxtFiles(txtFiles, currentLevelTxtFiles, manifest);
+  const filesToImport = sortDirectoryFiles(selection.files, manifest);
   const directoryName = manifest.title || getBrowserDirectoryName(filesToImport[0]) || "分章小说";
   const coverResult = await readBrowserDirectoryCover(allFiles, manifest);
   const chapters = await Promise.all(
     filesToImport.map(async (file, index) => {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const paragraphs = splitParagraphs(decodeText(bytes));
-      const chapter = buildDirectoryChapter(file.name, paragraphs, index, getManifestTitle(manifest, file.name));
+      const chapter = buildDirectoryChapter(file.name, paragraphs, index, getManifestTitle(manifest, getBrowserRelativePath(file)));
       return {
         id: `chapter-${index}`,
         ...chapter,
@@ -70,7 +78,7 @@ export async function importBrowserDirectory(files: FileList | File[]): Promise<
     "txt",
     chapters,
     "directory",
-    [...buildDirectoryWarnings(chapters.length, manifest.total), ...manifest.warnings, ...coverResult.warnings],
+    [...buildDirectoryWarnings(chapters.length, manifest.total), ...manifest.warnings, ...selection.warnings, ...coverResult.warnings],
     directoryName,
     {
       author: manifest.author,
@@ -118,19 +126,9 @@ export async function importTauriDirectory(): Promise<ImportResult | null> {
   if (!selected || Array.isArray(selected)) return null;
 
   const entries = await fs.readDir(selected);
-  let txtEntries = entries
-    .filter((entry) => !entry.isDirectory && entry.name.toLowerCase().endsWith(".txt"))
-    .map((entry) => ({ ...entry, path: joinPath(selected, entry.name) }))
-    .sort((a, b) => compareNatural(a.name, b.name));
-
-  if (txtEntries.length === 0 && entries.some((entry) => entry.isDirectory && entry.name === "chapters")) {
-    const chaptersPath = joinPath(selected, "chapters");
-    const chapterEntries = await fs.readDir(chaptersPath);
-    txtEntries = chapterEntries
-      .filter((entry) => !entry.isDirectory && entry.name.toLowerCase().endsWith(".txt"))
-      .map((entry) => ({ ...entry, path: joinPath(chaptersPath, entry.name) }))
-      .sort((a, b) => compareNatural(a.name, b.name));
-  }
+  const manifest = await readTauriDirectoryManifest(fs, entries, selected);
+  const selection = await selectTauriDirectoryTxtEntries(fs, entries, selected, manifest);
+  let txtEntries = selection.entries;
 
   if (txtEntries.length === 0) {
     throw {
@@ -139,29 +137,30 @@ export async function importTauriDirectory(): Promise<ImportResult | null> {
     } satisfies ImportError;
   }
 
-  const manifest = await readTauriDirectoryManifest(fs, entries, selected);
   txtEntries = sortDirectoryEntries(txtEntries, manifest);
   const coverResult = await readTauriDirectoryCover(fs, entries, selected, manifest);
-  const chapters = await Promise.all(
-    txtEntries.map(async (entry, index) => {
-      const bytes = await fs.readFile(entry.path);
-      const paragraphs = splitParagraphs(decodeText(bytes));
-      const chapter = buildDirectoryChapter(entry.name, paragraphs, index, getManifestTitle(manifest, entry.name));
-      return {
-        id: `chapter-${index}`,
-        ...chapter,
-        startIndex: index,
-      };
-    }),
-  );
+  const readResult = await readTauriDirectoryChapters(fs, txtEntries, manifest);
+
+  if (readResult.chapters.length === 0) {
+    throw {
+      title: "目录里的 TXT 无法读取",
+      message: "已找到 TXT 文件，但没有任何章节成功读取，请检查文件是否仍在原目录中。",
+    } satisfies ImportError;
+  }
 
   const directoryName = manifest.title || selected.split(/[\\/]/).filter(Boolean).pop() || "分章小说";
   return buildBookFromChapters(
     directoryName,
     "txt",
-    chapters,
+    readResult.chapters,
     "directory",
-    [...buildDirectoryWarnings(chapters.length, manifest.total), ...manifest.warnings, ...coverResult.warnings],
+    [
+      ...buildDirectoryWarnings(readResult.chapters.length, manifest.total),
+      ...manifest.warnings,
+      ...selection.warnings,
+      ...readResult.warnings,
+      ...coverResult.warnings,
+    ],
     directoryName,
     {
       author: manifest.author,
@@ -296,17 +295,132 @@ function compareFilesNaturally(a: File, b: File) {
   return compareNatural(pathA, pathB);
 }
 
-function sortDirectoryFiles(files: File[], manifest: DirectoryManifest) {
-  return [...files].sort((a, b) => compareManifestOrder(a.name, b.name, manifest) ?? compareFilesNaturally(a, b));
+function selectBrowserDirectoryTxtFiles(txtFiles: File[], currentLevelTxtFiles: File[], manifest: DirectoryManifest) {
+  if (manifest.fileNames.length === 0) {
+    return {
+      files: currentLevelTxtFiles.length > 0 ? currentLevelTxtFiles : txtFiles,
+      warnings: [] as string[],
+    };
+  }
+
+  const files: File[] = [];
+  const warnings: string[] = [];
+  const seen = new Set<string>();
+
+  for (const fileName of manifest.fileNames) {
+    const file = findBrowserFileByManifestName(txtFiles, fileName);
+    if (!file) {
+      warnings.push(`未找到章节文件 ${fileName}，已跳过。`);
+      continue;
+    }
+
+    const key = getBrowserRelativePath(file).toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    files.push(file);
+  }
+
+  if (files.length > 0) return { files, warnings };
+
+  return {
+    files: currentLevelTxtFiles.length > 0 ? currentLevelTxtFiles : txtFiles,
+    warnings: ["directory.json 的章节文件没有匹配到 TXT，已按文件名顺序导入。"],
+  };
 }
 
-function sortDirectoryEntries<T extends { name: string }>(entries: T[], manifest: DirectoryManifest) {
-  return [...entries].sort((a, b) => compareManifestOrder(a.name, b.name, manifest) ?? compareNatural(a.name, b.name));
+async function selectTauriDirectoryTxtEntries(
+  fs: typeof import("@tauri-apps/plugin-fs"),
+  entries: Array<{ name: string; isDirectory: boolean }>,
+  directory: string,
+  manifest: DirectoryManifest,
+) {
+  if (manifest.fileNames.length > 0) {
+    const selectedEntries = manifest.fileNames.flatMap((fileName): TauriDirectoryTxtEntry[] => {
+      const relativePath = normalizeRelativeManifestPath(fileName);
+      if (!relativePath || !relativePath.toLowerCase().endsWith(".txt")) return [];
+      return [
+        {
+          name: getPathBaseName(relativePath),
+          path: joinPath(directory, relativePath),
+          manifestFileName: fileName,
+        },
+      ];
+    });
+
+    if (selectedEntries.length > 0) return { entries: selectedEntries, warnings: [] as string[] };
+    return {
+      entries: await readDefaultTauriDirectoryTxtEntries(fs, entries, directory),
+      warnings: ["directory.json 的章节文件路径无效，已按文件名顺序导入。"],
+    };
+  }
+
+  return {
+    entries: await readDefaultTauriDirectoryTxtEntries(fs, entries, directory),
+    warnings: [] as string[],
+  };
+}
+
+async function readDefaultTauriDirectoryTxtEntries(
+  fs: typeof import("@tauri-apps/plugin-fs"),
+  entries: Array<{ name: string; isDirectory: boolean }>,
+  directory: string,
+): Promise<TauriDirectoryTxtEntry[]> {
+  let txtEntries = entries
+    .filter((entry) => !entry.isDirectory && entry.name.toLowerCase().endsWith(".txt"))
+    .map((entry) => ({ name: entry.name, path: joinPath(directory, entry.name) }))
+    .sort((a, b) => compareNatural(a.name, b.name));
+
+  if (txtEntries.length === 0 && entries.some((entry) => entry.isDirectory && entry.name === "chapters")) {
+    const chaptersPath = joinPath(directory, "chapters");
+    const chapterEntries = await fs.readDir(chaptersPath);
+    txtEntries = chapterEntries
+      .filter((entry) => !entry.isDirectory && entry.name.toLowerCase().endsWith(".txt"))
+      .map((entry) => ({ name: entry.name, path: joinPath(chaptersPath, entry.name) }))
+      .sort((a, b) => compareNatural(a.name, b.name));
+  }
+
+  return txtEntries;
+}
+
+async function readTauriDirectoryChapters(
+  fs: typeof import("@tauri-apps/plugin-fs"),
+  entries: TauriDirectoryTxtEntry[],
+  manifest: DirectoryManifest,
+) {
+  const chapters: Book["chapters"] = [];
+  const warnings: string[] = [];
+
+  for (const entry of entries) {
+    try {
+      const bytes = await fs.readFile(entry.path);
+      const paragraphs = splitParagraphs(decodeText(bytes));
+      const chapter = buildDirectoryChapter(entry.name, paragraphs, chapters.length, getManifestTitle(manifest, entry.manifestFileName ?? entry.name));
+      chapters.push({
+        id: `chapter-${chapters.length}`,
+        ...chapter,
+        startIndex: chapters.length,
+      });
+    } catch {
+      warnings.push(`未读取到章节文件 ${entry.manifestFileName ?? entry.name}，已跳过。`);
+    }
+  }
+
+  return { chapters, warnings };
+}
+
+function sortDirectoryFiles(files: File[], manifest: DirectoryManifest) {
+  return [...files].sort((a, b) => compareManifestOrder(getBrowserRelativePath(a), getBrowserRelativePath(b), manifest) ?? compareFilesNaturally(a, b));
+}
+
+function sortDirectoryEntries<T extends { name: string; manifestFileName?: string }>(entries: T[], manifest: DirectoryManifest) {
+  return [...entries].sort(
+    (a, b) => compareManifestOrder(a.manifestFileName ?? a.name, b.manifestFileName ?? b.name, manifest) ?? compareNatural(a.name, b.name),
+  );
 }
 
 function compareManifestOrder(a: string, b: string, manifest: DirectoryManifest) {
-  const orderA = manifest.orderByFileName.get(normalizeManifestFileKey(a));
-  const orderB = manifest.orderByFileName.get(normalizeManifestFileKey(b));
+  const orderA = getManifestOrder(manifest, a);
+  const orderB = getManifestOrder(manifest, b);
   if (orderA === undefined && orderB === undefined) return null;
   if (orderA === undefined) return 1;
   if (orderB === undefined) return -1;
@@ -314,7 +428,11 @@ function compareManifestOrder(a: string, b: string, manifest: DirectoryManifest)
 }
 
 function getManifestTitle(manifest: DirectoryManifest, fileName: string) {
-  return manifest.titleByFileName.get(normalizeManifestFileKey(fileName));
+  return manifest.titleByFileName.get(normalizeFileKey(fileName)) ?? manifest.titleByFileName.get(normalizeBaseNameKey(fileName));
+}
+
+function getManifestOrder(manifest: DirectoryManifest, fileName: string) {
+  return manifest.orderByFileName.get(normalizeFileKey(fileName)) ?? manifest.orderByFileName.get(normalizeBaseNameKey(fileName));
 }
 
 function compareNatural(a: string, b: string) {
@@ -450,6 +568,7 @@ function buildLegacyDirectoryManifest(raw: unknown[]) {
 
 function buildManifestFromEntries(rawEntries: unknown[]): DirectoryManifest {
   const entries = rawEntries.filter(isDirectoryEntry);
+  const fileNames: string[] = [];
   const titleByFileName = new Map<string, string>();
   const orderByFileName = new Map<string, number>();
 
@@ -461,12 +580,17 @@ function buildManifestFromEntries(rawEntries: unknown[]): DirectoryManifest {
     const fileName = explicitFile || generatedFile;
     if (!fileName) continue;
 
-    const key = normalizeManifestFileKey(fileName);
+    fileNames.push(fileName);
+    const key = normalizeFileKey(fileName);
+    const baseNameKey = normalizeBaseNameKey(fileName);
     titleByFileName.set(key, entry.title);
     orderByFileName.set(key, entry.order);
+    if (!titleByFileName.has(baseNameKey)) titleByFileName.set(baseNameKey, entry.title);
+    if (!orderByFileName.has(baseNameKey)) orderByFileName.set(baseNameKey, entry.order);
   }
 
   return {
+    fileNames,
     total: entries.length,
     titleByFileName,
     orderByFileName,
@@ -476,6 +600,7 @@ function buildManifestFromEntries(rawEntries: unknown[]): DirectoryManifest {
 
 function emptyDirectoryManifest(): DirectoryManifest {
   return {
+    fileNames: [],
     total: null as number | null,
     titleByFileName: new Map<string, string>(),
     orderByFileName: new Map<string, number>(),
@@ -497,7 +622,11 @@ function getOptionalString(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function normalizeManifestFileKey(fileName: string) {
+function normalizeFileKey(fileName: string) {
+  return fileName.replace(/\\/g, "/").split("/").filter(Boolean).join("/").toLowerCase();
+}
+
+function normalizeBaseNameKey(fileName: string) {
   const normalized = fileName.replace(/\\/g, "/");
   return (normalized.split("/").filter(Boolean).pop() || normalized).toLowerCase();
 }
@@ -574,6 +703,17 @@ function findBrowserFileByRelativePath(files: File[], relativePath: string) {
   return files.find((file) => getBrowserRelativePath(file).toLowerCase() === normalizedPath);
 }
 
+function findBrowserFileByManifestName(files: File[], fileName: string) {
+  const relativePath = normalizeRelativeManifestPath(fileName);
+  if (!relativePath) return null;
+
+  const exactMatch = findBrowserFileByRelativePath(files, relativePath);
+  if (exactMatch) return exactMatch;
+
+  const baseName = getPathBaseName(relativePath).toLowerCase();
+  return files.find((file) => file.name.toLowerCase() === baseName) ?? null;
+}
+
 function getBrowserRelativePath(file: File) {
   const path = file.webkitRelativePath || file.name;
   const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
@@ -593,6 +733,10 @@ function normalizeRelativeManifestPath(path: string) {
   const parts = normalized.split("/").filter(Boolean);
   if (parts.length === 0 || parts.some((part) => part === "." || part === "..")) return null;
   return parts.join("/");
+}
+
+function getPathBaseName(path: string) {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean).pop() || path;
 }
 
 function getImageMimeType(fileName: string) {
