@@ -9,6 +9,7 @@ interface ParagraphMetric {
   text: string;
   startOffset: number;
   endOffset: number;
+  boundaries: number[];
 }
 
 export function paginateParagraphs(
@@ -83,7 +84,7 @@ export function paginatePreviousPage(
   prepareMeasure(measure, settings);
   resetMeasure(measure);
 
-  const normalizedEnd = Math.max(endOffset, first.startOffset + 1);
+  const normalizedEnd = normalizeTextEnd(metrics, Math.max(endOffset, first.startOffset + 1));
   let low = first.startOffset;
   let high = normalizedEnd - 1;
   let bestStart: number | null = null;
@@ -130,6 +131,7 @@ function buildParagraphMetrics(paragraphs: string[]) {
       text: paragraph,
       startOffset,
       endOffset,
+      boundaries: buildTextBoundaries(paragraph),
     });
     offset = endOffset + paragraphSeparatorLength;
   });
@@ -140,14 +142,20 @@ function buildParagraphMetrics(paragraphs: string[]) {
 function findPageEnd(metrics: ParagraphMetric[], measure: HTMLElement, startOffset: number, maxOffset: number) {
   let low = startOffset + 1;
   let high = maxOffset;
-  let best = low;
+  let best = normalizeTextEnd(metrics, low);
 
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    renderMeasuredPage(measure, makeBlocks(metrics, startOffset, mid));
+    const candidateEnd = normalizeTextEnd(metrics, mid);
+    if (candidateEnd <= startOffset) {
+      low = mid + 1;
+      continue;
+    }
+
+    renderMeasuredPage(measure, makeBlocks(metrics, startOffset, candidateEnd));
 
     if (fitsMeasure(measure)) {
-      best = mid;
+      best = candidateEnd;
       low = mid + 1;
     } else {
       high = mid - 1;
@@ -176,8 +184,8 @@ function makeBlocks(metrics: ParagraphMetric[], startOffset: number, endOffset: 
     if (paragraph.endOffset <= startOffset) continue;
     if (paragraph.startOffset >= endOffset) break;
 
-    const blockStart = Math.max(startOffset, paragraph.startOffset);
-    const blockEnd = Math.min(endOffset, paragraph.endOffset);
+    const blockStart = normalizeParagraphTextStart(paragraph, Math.max(startOffset, paragraph.startOffset));
+    const blockEnd = normalizeParagraphTextEnd(paragraph, Math.min(endOffset, paragraph.endOffset));
     if (blockStart >= blockEnd) continue;
 
     blocks.push({
@@ -195,9 +203,75 @@ function makeBlocks(metrics: ParagraphMetric[], startOffset: number, endOffset: 
 function normalizeTextStart(metrics: ParagraphMetric[], offset: number) {
   for (const paragraph of metrics) {
     if (offset < paragraph.startOffset) return paragraph.startOffset;
-    if (offset < paragraph.endOffset) return offset;
+    if (offset < paragraph.endOffset) return normalizeParagraphTextStart(paragraph, offset);
   }
   return metrics.at(-1)?.endOffset ?? offset;
+}
+
+function normalizeTextEnd(metrics: ParagraphMetric[], offset: number) {
+  for (const paragraph of metrics) {
+    if (offset <= paragraph.startOffset) return paragraph.startOffset;
+    if (offset <= paragraph.endOffset) return normalizeParagraphTextEnd(paragraph, offset);
+  }
+  return metrics.at(-1)?.endOffset ?? offset;
+}
+
+function normalizeParagraphTextStart(paragraph: ParagraphMetric, offset: number) {
+  const localOffset = Math.min(Math.max(offset - paragraph.startOffset, 0), paragraph.text.length);
+  return paragraph.startOffset + findBoundaryAtOrAfter(paragraph.boundaries, localOffset);
+}
+
+function normalizeParagraphTextEnd(paragraph: ParagraphMetric, offset: number) {
+  const localOffset = Math.min(Math.max(offset - paragraph.startOffset, 0), paragraph.text.length);
+  return paragraph.startOffset + findBoundaryAtOrBefore(paragraph.boundaries, localOffset);
+}
+
+function buildTextBoundaries(text: string) {
+  const boundaries = [0];
+  for (let index = 0; index < text.length;) {
+    const codePoint = text.codePointAt(index);
+    index += codePoint !== undefined && codePoint > 0xffff ? 2 : 1;
+    boundaries.push(index);
+  }
+  return boundaries;
+}
+
+function findBoundaryAtOrAfter(boundaries: number[], offset: number) {
+  let low = 0;
+  let high = boundaries.length - 1;
+  let best = boundaries[boundaries.length - 1] ?? offset;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const value = boundaries[mid];
+    if (value >= offset) {
+      best = value;
+      high = mid - 1;
+    } else {
+      low = mid + 1;
+    }
+  }
+
+  return best;
+}
+
+function findBoundaryAtOrBefore(boundaries: number[], offset: number) {
+  let low = 0;
+  let high = boundaries.length - 1;
+  let best = boundaries[0] ?? offset;
+
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const value = boundaries[mid];
+    if (value <= offset) {
+      best = value;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  return best;
 }
 
 function prepareMeasure(measure: HTMLElement, settings: ReaderSettings) {
