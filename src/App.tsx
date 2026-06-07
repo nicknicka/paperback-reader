@@ -20,6 +20,7 @@ export default function App() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<ImportError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [newBookId, setNewBookId] = useState<string | null>(null);
 
   useEffect(() => {
     listBooks().then(setBooks).catch((reason) => {
@@ -62,12 +63,11 @@ export default function App() {
 
       if (!result) return;
       await upsertBook(result.book);
-      setActiveBookId(result.book.id);
-      setActiveBook(result.book);
-      setView("reader");
-      if (result.warnings.length > 0) {
-        setNotice(result.warnings.join(" "));
-      }
+      setNewBookId(result.book.id);
+      setActiveBookId(null);
+      setActiveBook(null);
+      setView("library");
+      setNotice(result.warnings.length > 0 ? result.warnings.join(" ") : `已导入《${result.book.title}》。`);
     } catch (reason) {
       const fallback = reason as Partial<ImportError>;
       setError({
@@ -91,6 +91,7 @@ export default function App() {
 
     const updated = { ...fullBook, lastOpenedAt: Date.now() };
     await upsertBook(updated);
+    if (newBookId === book.id) setNewBookId(null);
     setActiveBookId(book.id);
     setActiveBook(updated);
     setView("reader");
@@ -99,6 +100,7 @@ export default function App() {
   const handleDelete = async (book: BookSummary) => {
     await deleteBook(book.id);
     setBooks((current) => current.filter((item) => item.id !== book.id));
+    if (newBookId === book.id) setNewBookId(null);
     if (activeBookId === book.id) {
       setActiveBookId(null);
       setActiveBook(null);
@@ -160,7 +162,9 @@ export default function App() {
       importing={importing}
       error={error}
       notice={notice}
+      newBookId={newBookId}
       onImport={handleImport}
+      onDismissNotice={() => setNotice(null)}
       onOpen={handleOpen}
       onDelete={handleDelete}
       onUpdateBookInfo={handleUpdateBookInfo}

@@ -9,7 +9,9 @@ interface LibraryProps {
   importing: boolean;
   error: ImportError | null;
   notice: string | null;
+  newBookId: string | null;
   onImport: (mode: ImportMode, payload?: File | FileList) => void;
+  onDismissNotice: () => void;
   onOpen: (book: BookSummary) => void;
   onDelete: (book: BookSummary) => void;
   onUpdateBookInfo: (
@@ -18,7 +20,18 @@ interface LibraryProps {
   ) => Promise<void>;
 }
 
-export function Library({ books, importing, error, notice, onImport, onOpen, onDelete, onUpdateBookInfo }: LibraryProps) {
+export function Library({
+  books,
+  importing,
+  error,
+  notice,
+  newBookId,
+  onImport,
+  onDismissNotice,
+  onOpen,
+  onDelete,
+  onUpdateBookInfo,
+}: LibraryProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const directoryInputRef = useRef<HTMLInputElement>(null);
   const importMenuRef = useRef<HTMLDivElement>(null);
@@ -134,8 +147,13 @@ export function Library({ books, importing, error, notice, onImport, onOpen, onD
       )}
       {!error && notice && (
         <section className="notice" role="status">
-          <strong>导入完成</strong>
-          <span>{notice}</span>
+          <div className="notice__body">
+            <strong>导入完成</strong>
+            <span>{notice}</span>
+          </div>
+          <button className="notice__close" type="button" onClick={onDismissNotice} aria-label="关闭导入完成提示">
+            ×
+          </button>
         </section>
       )}
 
@@ -158,6 +176,7 @@ export function Library({ books, importing, error, notice, onImport, onOpen, onD
         <section className="book-grid" aria-label="本地书籍">
           {books.map((book) => (
             <article className="book-card" key={book.id}>
+              {book.id === newBookId && <span className="book-card__badge">新书</span>}
               <button className="book-card__open" onClick={() => onOpen(book)}>
                 <BookCover book={book} />
                 <div className="book-card__body">
