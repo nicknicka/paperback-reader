@@ -19,6 +19,7 @@ interface DirectoryManifest {
   description?: string;
   cover?: string;
   fileNames: string[];
+  fileGroups: string[][];
   total: number | null;
   titleByFileName: Map<string, string>;
   orderByFileName: Map<string, number>;
@@ -29,6 +30,8 @@ interface TauriDirectoryTxtEntry {
   name: string;
   path: string;
   manifestFileName?: string;
+  candidatePaths?: string[];
+  candidateNames?: string[];
 }
 
 export async function importBrowserFile(file: File): Promise<ImportResult> {
@@ -307,10 +310,10 @@ function selectBrowserDirectoryTxtFiles(txtFiles: File[], currentLevelTxtFiles: 
   const warnings: string[] = [];
   const seen = new Set<string>();
 
-  for (const fileName of manifest.fileNames) {
-    const file = findBrowserFileByManifestName(txtFiles, fileName);
+  for (const fileGroup of manifest.fileGroups) {
+    const file = fileGroup.map((fileName) => findBrowserFileByManifestName(txtFiles, fileName)).find(Boolean);
     if (!file) {
-      warnings.push(`未找到章节文件 ${fileName}，已跳过。`);
+      warnings.push(`未找到章节文件 ${fileGroup[0]}，已跳过。`);
       continue;
     }
 
@@ -335,14 +338,19 @@ async function selectTauriDirectoryTxtEntries(
   manifest: DirectoryManifest,
 ) {
   if (manifest.fileNames.length > 0) {
-    const selectedEntries = manifest.fileNames.flatMap((fileName): TauriDirectoryTxtEntry[] => {
-      const relativePath = normalizeRelativeManifestPath(fileName);
-      if (!relativePath || !relativePath.toLowerCase().endsWith(".txt")) return [];
+    const selectedEntries = manifest.fileGroups.flatMap((fileGroup): TauriDirectoryTxtEntry[] => {
+      const candidates = fileGroup
+        .map((fileName) => normalizeRelativeManifestPath(fileName))
+        .filter((fileName): fileName is string => typeof fileName === "string" && fileName.toLowerCase().endsWith(".txt"));
+      const relativePath = candidates[0];
+      if (!relativePath) return [];
       return [
         {
           name: getPathBaseName(relativePath),
           path: joinPath(directory, relativePath),
-          manifestFileName: fileName,
+          manifestFileName: relativePath,
+          candidatePaths: candidates.map((candidate) => joinPath(directory, candidate)),
+          candidateNames: fileGroup,
         },
       ];
     });
@@ -391,8 +399,25 @@ async function readTauriDirectoryChapters(
   const warnings: string[] = [];
 
   for (const entry of entries) {
+    let bytes: Uint8Array | null = null;
+    const candidatePaths = entry.candidatePaths ?? [entry.path];
+    const candidateNames = entry.candidateNames ?? [entry.manifestFileName ?? entry.name];
+
+    for (const candidatePath of candidatePaths) {
+      try {
+        bytes = await fs.readFile(candidatePath);
+        break;
+      } catch {
+        // Try the next manifest-compatible path.
+      }
+    }
+
+    if (!bytes) {
+      warnings.push(`未读取到章节文件 ${candidateNames[0]}，已跳过。`);
+      continue;
+    }
+
     try {
-      const bytes = await fs.readFile(entry.path);
       const paragraphs = splitParagraphs(decodeText(bytes));
       const chapter = buildDirectoryChapter(entry.name, paragraphs, chapters.length, getManifestTitle(manifest, entry.manifestFileName ?? entry.name));
       chapters.push({
@@ -401,7 +426,7 @@ async function readTauriDirectoryChapters(
         startIndex: chapters.length,
       });
     } catch {
-      warnings.push(`未读取到章节文件 ${entry.manifestFileName ?? entry.name}，已跳过。`);
+      warnings.push(`未解析到章节文件 ${candidateNames[0]}，已跳过。`);
     }
   }
 
@@ -569,28 +594,32 @@ function buildLegacyDirectoryManifest(raw: unknown[]) {
 function buildManifestFromEntries(rawEntries: unknown[]): DirectoryManifest {
   const entries = rawEntries.filter(isDirectoryEntry);
   const fileNames: string[] = [];
+  const fileGroups: string[][] = [];
   const titleByFileName = new Map<string, string>();
   const orderByFileName = new Map<string, number>();
 
   for (const entry of entries) {
     const explicitFile = getOptionalString(entry.file);
-    const generatedFile = getOptionalString(entry.chapter_id)
-      ? `${String(entry.order).padStart(4, "0")}_${entry.chapter_id}.txt`
-      : null;
-    const fileName = explicitFile || generatedFile;
-    if (!fileName) continue;
+    const candidates = explicitFile ? [explicitFile] : buildLegacyChapterFileCandidates(entry);
+    if (candidates.length === 0) continue;
 
+    const fileName = candidates[0];
     fileNames.push(fileName);
-    const key = normalizeFileKey(fileName);
-    const baseNameKey = normalizeBaseNameKey(fileName);
-    titleByFileName.set(key, entry.title);
-    orderByFileName.set(key, entry.order);
-    if (!titleByFileName.has(baseNameKey)) titleByFileName.set(baseNameKey, entry.title);
-    if (!orderByFileName.has(baseNameKey)) orderByFileName.set(baseNameKey, entry.order);
+    fileGroups.push(candidates);
+
+    for (const candidate of candidates) {
+      const key = normalizeFileKey(candidate);
+      const baseNameKey = normalizeBaseNameKey(candidate);
+      titleByFileName.set(key, entry.title);
+      orderByFileName.set(key, entry.order);
+      if (!titleByFileName.has(baseNameKey)) titleByFileName.set(baseNameKey, entry.title);
+      if (!orderByFileName.has(baseNameKey)) orderByFileName.set(baseNameKey, entry.order);
+    }
   }
 
   return {
     fileNames,
+    fileGroups,
     total: entries.length,
     titleByFileName,
     orderByFileName,
@@ -601,11 +630,23 @@ function buildManifestFromEntries(rawEntries: unknown[]): DirectoryManifest {
 function emptyDirectoryManifest(): DirectoryManifest {
   return {
     fileNames: [],
+    fileGroups: [],
     total: null as number | null,
     titleByFileName: new Map<string, string>(),
     orderByFileName: new Map<string, number>(),
     warnings: [],
   };
+}
+
+function buildLegacyChapterFileCandidates(entry: DirectoryEntry) {
+  const orderFile = `${String(entry.order).padStart(4, "0")}.txt`;
+  const candidates: string[] = [];
+  if (entry.chapter_id) {
+    const idFile = `${String(entry.order).padStart(4, "0")}_${entry.chapter_id}.txt`;
+    candidates.push(idFile, `chapters/${idFile}`);
+  }
+  candidates.push(orderFile, `chapters/${orderFile}`);
+  return candidates;
 }
 
 function isDirectoryEntry(value: unknown): value is DirectoryEntry {
