@@ -15,7 +15,7 @@
 
 下载 `paperback-reader-macos`，解压后打开里面的 `.dmg`，把 `Paperback Reader.app` 拖到 `Applications`。
 
-如果 macOS 提示“无法验证开发者”或“已损坏，无法打开”，这是因为当前包还没有 Apple Developer ID 签名和公证。自用或熟人测试可以执行：
+如果 macOS 提示“无法验证开发者”或“已损坏，无法打开”，这是因为当前包还没有 Apple Developer ID 签名和公证。测试可以执行：
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/Paperback Reader.app"
