@@ -2,6 +2,55 @@
 
 本地桌面小说阅读器 MVP。核心范围是本地书库、TXT/DOC/DOCX 导入、自动目录、单页分页阅读、排版台和阅读进度恢复。
 
+## Download & Install
+
+当前桌面安装包由 GitHub Actions 自动构建：
+
+- [Latest Actions Builds](https://github.com/nicknicka/paperback-reader/actions/workflows/build-desktop.yml)
+- [Repository Actions](https://github.com/nicknicka/paperback-reader/actions)
+
+打开最新一次绿色通过的 `Build Desktop Installers`，在页面底部 `Artifacts` 区域下载安装包。GitHub 下载的 artifact 通常是 `.zip`，需要先解压。
+
+### macOS
+
+下载 `paperback-reader-macos`，解压后打开里面的 `.dmg`，把 `Paperback Reader.app` 拖到 `Applications`。
+
+如果 macOS 提示“无法验证开发者”或“已损坏，无法打开”，这是因为当前包还没有 Apple Developer ID 签名和公证。自用或熟人测试可以执行：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Paperback Reader.app"
+open "/Applications/Paperback Reader.app"
+```
+
+正式公开分发需要 Apple Developer Program、Developer ID 签名和 notarization 公证。
+
+### Windows
+
+下载 `paperback-reader-windows`，解压后优先运行 `.msi` 安装包；如果没有 `.msi`，运行 `.exe` 安装包。
+
+Windows 可能会显示 SmartScreen 提示。自用测试时可以选择“更多信息”然后继续运行；正式分发需要代码签名证书来减少安全提示。
+
+### Linux
+
+当前 GitHub Actions 只构建 macOS 和 Windows 安装包，暂未提供 Linux artifact。Linux 用户可以先从源码运行或自行执行 Tauri build。
+
+### Build From Source
+
+需要 Node.js、npm 和 Rust toolchain。
+
+```bash
+git clone git@github.com:nicknicka/paperback-reader.git
+cd paperback-reader
+npm ci
+npm run tauri build
+```
+
+本地构建产物会出现在：
+
+```text
+src-tauri/target/release/bundle/
+```
+
 ## Run
 
 ```bash
