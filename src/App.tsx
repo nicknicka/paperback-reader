@@ -110,7 +110,7 @@ export default function App() {
 
   const handleUpdateBookInfo = async (
     book: BookSummary,
-    updates: { title: string; author?: string; coverImageUrl?: string },
+    updates: { title: string; author?: string; description?: string; coverImageUrl?: string },
   ) => {
     const fullBook = await getBook(book.id);
     if (!fullBook) {
@@ -123,10 +123,12 @@ export default function App() {
 
     const title = updates.title.trim() || fullBook.title;
     const author = updates.author?.trim() || undefined;
+    const description = updates.description?.trim() || undefined;
     await upsertBook({
       ...fullBook,
       title,
       author,
+      description,
       cover: {
         ...fullBook.cover,
         mark: title.replace(/\s+/g, "").slice(0, 1) || "书",

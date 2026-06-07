@@ -29,6 +29,7 @@ export interface Book {
   id: string;
   title: string;
   author?: string;
+  description?: string;
   fileName: string;
   fileKind: FileKind;
   sourceKind: "file" | "directory";
@@ -50,6 +51,7 @@ export interface BookSummary {
   id: string;
   title: string;
   author?: string;
+  description?: string;
   fileName: string;
   fileKind: FileKind;
   sourceKind: "file" | "directory";

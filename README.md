@@ -103,9 +103,50 @@ Tauri 桌面端还支持 `chapters/` 子目录作为兼容路径。如果根目�
 
 ### Optional Directory Manifest
 
-目录根路径可以包含一个可选的 `directory.json`，用于校准章节标题和完整章节数量。
+目录根路径可以包含一个可选的 `directory.json`，用于声明书名、作者、简介、封面和章节清单。
 
-格式：
+推荐格式：
+
+```json
+{
+  "version": 1,
+  "title": "小说名",
+  "author": "作者名",
+  "description": "作品简介，可选",
+  "cover": "cover.jpg",
+  "chapters": [
+    {
+      "order": 1,
+      "title": "第1章 开始",
+      "file": "0001_41550.txt"
+    },
+    {
+      "order": 2,
+      "title": "第2章 远行",
+      "file": "0002_41551.txt"
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `title` 会作为书名；没有时继续使用目录名。
+- `author` 和 `description` 会保存到本地书籍信息里，简介不显示在书库卡片上。
+- `cover` 指向目录内图片，支持 JPG、PNG、WebP，大小不能超过 3MB。
+- `chapters[].file` 是章节 TXT 文件名，章节会优先按 `order` 排序。
+
+如果没有 `cover` 字段，导入时会自动查找根目录下的常见封面文件：
+
+```text
+cover.jpg
+cover.jpeg
+cover.png
+cover.webp
+poster.jpg
+```
+
+旧版数组格式仍然兼容，但只用于校准章节标题和完整章节数量：
 
 ```json
 [
@@ -122,7 +163,7 @@ Tauri 桌面端还支持 `chapters/` 子目录作为兼容路径。如果根目�
 ]
 ```
 
-文件名匹配规则：
+旧版数组格式的文件名匹配规则：
 
 ```text
 {order补4位}_{chapter_id}.txt
@@ -136,3 +177,5 @@ Tauri 桌面端还支持 `chapters/` 子目录作为兼容路径。如果根目�
 ```
 
 如果 TXT 文件名只是数字，或类似 `0001_41550.txt`，章节标题会优先使用 `directory.json`；没有 manifest 时，会优先使用正文第一段作为章节标题。
+
+如果 `directory.json` 不存在、无法解析，或缺少章节清单，应用会继续按文件名自然排序导入 TXT，并使用目录名与自动文字封面。

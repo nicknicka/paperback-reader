@@ -544,7 +544,8 @@ button:disabled {
   font-size: 13px;
 }
 
-.field input {
+.field input,
+.field textarea {
   width: 100%;
   min-height: 40px;
   padding: 0 12px;
@@ -552,14 +553,23 @@ button:disabled {
   border-radius: 10px;
   background: rgb(255 255 255 / 0.66);
   color: #2b2925;
+  font: inherit;
   outline: none;
+  resize: vertical;
   transition:
     border-color 150ms ease,
     background 150ms ease,
     box-shadow 150ms ease;
 }
 
-.field input:focus {
+.field textarea {
+  min-height: 92px;
+  padding-block: 10px;
+  line-height: 1.6;
+}
+
+.field input:focus,
+.field textarea:focus {
   border-color: rgb(38 35 31 / 0.34);
   background: rgb(255 255 255 / 0.92);
   box-shadow: 0 0 0 3px rgb(38 35 31 / 0.08);

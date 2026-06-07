@@ -16,7 +16,7 @@ interface LibraryProps {
   onDelete: (book: BookSummary) => void;
   onUpdateBookInfo: (
     book: BookSummary,
-    updates: { title: string; author?: string; coverImageUrl?: string },
+    updates: { title: string; author?: string; description?: string; coverImageUrl?: string },
   ) => Promise<void>;
 }
 
@@ -224,11 +224,12 @@ function BookEditDialog({
 }: {
   book: BookSummary;
   onClose: () => void;
-  onSave: (updates: { title: string; author?: string; coverImageUrl?: string }) => Promise<void>;
+  onSave: (updates: { title: string; author?: string; description?: string; coverImageUrl?: string }) => Promise<void>;
 }) {
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(book.title);
   const [author, setAuthor] = useState(book.author ?? "");
+  const [description, setDescription] = useState(book.description ?? "");
   const [coverImageUrl, setCoverImageUrl] = useState(book.cover.imageUrl ?? "");
   const [saving, setSaving] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -282,6 +283,7 @@ function BookEditDialog({
       await onSave({
         title,
         author,
+        description,
         coverImageUrl,
       });
       requestClose();
@@ -295,6 +297,7 @@ function BookEditDialog({
     ...book,
     title,
     author: author.trim() || undefined,
+    description: description.trim() || undefined,
     cover: {
       ...book.cover,
       imageUrl: coverImageUrl || undefined,
@@ -349,6 +352,16 @@ function BookEditDialog({
           <label className="field">
             <span>作者</span>
             <input value={author} onChange={(event) => setAuthor(event.target.value)} maxLength={60} placeholder="可留空" />
+          </label>
+          <label className="field">
+            <span>简介</span>
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              maxLength={500}
+              placeholder="可留空"
+              rows={4}
+            />
           </label>
           <div className="book-edit-dialog__meta" aria-label="导入信息">
             <span>{book.fileKind.toUpperCase()}</span>
