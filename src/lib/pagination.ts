@@ -1,8 +1,15 @@
 import type { Page, PageBlock, ReaderSettings } from "./types";
 import { fontStacks } from "./defaults";
 
-const pageEndBuffer = 16;
+const minimumPageEndBuffer = 16;
 const paragraphSeparatorLength = 1;
+
+type GraphemeSegmenter = new (
+  locale?: string,
+  options?: { granularity?: "grapheme" },
+) => {
+  segment(input: string): Iterable<{ segment: string; index: number }>;
+};
 
 interface ParagraphMetric {
   index: number;
@@ -227,6 +234,18 @@ function normalizeParagraphTextEnd(paragraph: ParagraphMetric, offset: number) {
 }
 
 function buildTextBoundaries(text: string) {
+  const Segmenter = (Intl as typeof Intl & { Segmenter?: GraphemeSegmenter }).Segmenter;
+  if (Segmenter) {
+    const boundaries = [0];
+    const segmenter = new Segmenter("zh-Hans", { granularity: "grapheme" });
+    for (const part of segmenter.segment(text)) {
+      const next = part.index + part.segment.length;
+      if (next > boundaries[boundaries.length - 1]) boundaries.push(next);
+    }
+    if (boundaries[boundaries.length - 1] !== text.length) boundaries.push(text.length);
+    return boundaries;
+  }
+
   const boundaries = [0];
   for (let index = 0; index < text.length;) {
     const codePoint = text.codePointAt(index);
@@ -305,5 +324,7 @@ function fitsMeasure(measure: HTMLElement) {
 
   const measureRect = measure.getBoundingClientRect();
   const lastRect = last.getBoundingClientRect();
+  const fontSize = Number.parseFloat(window.getComputedStyle(measure).fontSize) || minimumPageEndBuffer;
+  const pageEndBuffer = Math.max(minimumPageEndBuffer, fontSize * 0.8);
   return lastRect.bottom <= measureRect.bottom - pageEndBuffer;
 }
