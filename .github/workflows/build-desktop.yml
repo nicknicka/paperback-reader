@@ -27,7 +27,6 @@ jobs:
             artifact_name: paperback-reader-macos
             artifact_path: |
               src-tauri/target/release/bundle/dmg/*.dmg
-              src-tauri/target/release/bundle/macos/*.app
 
     steps:
       - name: Checkout repository
