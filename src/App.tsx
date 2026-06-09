@@ -69,10 +69,11 @@ export default function App() {
       setView("library");
       setNotice(result.warnings.length > 0 ? result.warnings.join(" ") : `已导入《${result.book.title}》。`);
     } catch (reason) {
+      console.error("Import failed", reason);
       const fallback = reason as Partial<ImportError>;
       setError({
         title: fallback.title ?? "导入失败",
-        message: fallback.message ?? (reason instanceof Error ? reason.message : "文件无法读取。"),
+        message: fallback.message ?? getErrorMessage(reason),
       });
     } finally {
       setImporting(false);
@@ -172,4 +173,10 @@ export default function App() {
       onUpdateBookInfo={handleUpdateBookInfo}
     />
   );
+}
+
+function getErrorMessage(reason: unknown) {
+  if (reason instanceof Error) return reason.message;
+  if (typeof reason === "string" && reason.trim()) return reason;
+  return "文件无法读取。";
 }

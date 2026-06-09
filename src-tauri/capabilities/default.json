@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Default permissions for local file import.",
   "windows": ["main"],
-  "permissions": ["core:default", "dialog:default", "fs:default"]
+  "permissions": ["core:default", "dialog:default", "fs:default", "fs:allow-download-read-recursive"]
 }
